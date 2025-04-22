@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
 import './App.css';
 
-const socket = io('https://hangman-backend-afff.onrender.com');
+const socket = io('http://localhost:8080');
 
 function App() {
   const [room, setRoom] = useState('');
@@ -29,11 +29,12 @@ function App() {
     socket.on('gameOver', ({ word, status }) => {
       if (status === 'win' && isWordSetter) {
         alert(` They guessed it! The word was "${word}"`);
+      } 
+      else if(status==='win'){
+        alert(` You guessed it! The word was "${word}"`);
       }
-      else if (status === 'win') {
-        alert(`You guessed it! The word was "${word}"`);}
-       else {
-        alert(`Game Over! The word was "${word}"`);
+      else {
+        alert(` Game Over! The word was "${word}"`);
       }
 
       setIsWordSetter(false);

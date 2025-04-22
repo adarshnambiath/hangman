@@ -1,34 +1,28 @@
 const express = require('express');
+const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
 
 const app = express();
 app.use(cors());
 
-// Create an HTTP server (Render will handle HTTPS)
-const server = require('http').Server(app);
-
-// Create a Socket.IO server
+const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: '*', // You can specify your Netlify frontend URL here if needed
+    origin: '*',
     methods: ['GET', 'POST']
   }
 });
 
-// Track the game state
-const games = {}; // Tracks state for each room
+const games = {}; 
 
-// Handle new connections
 io.on('connection', (socket) => {
   console.log('A user connected:', socket.id);
 
-  // Handle joining a room
   socket.on('joinRoom', (room) => {
     socket.join(room);
     socket.room = room;
 
-    // Create room if it doesn't exist
     if (!games[room]) {
       games[room] = {
         word: '',
@@ -42,7 +36,6 @@ io.on('connection', (socket) => {
     socket.emit('gameState', game);
   });
 
-  // Set the word to be guessed
   socket.on('setWord', ({ room, word }) => {
     const game = games[room];
     if (!game || game.mutex) return;
@@ -82,16 +75,18 @@ io.on('connection', (socket) => {
           status: won ? 'win' : 'lose'
         });
 
-        // Reset game for room
-        game.word = '';
-        game.revealed = [];
-        game.guesses = [];
-        game.mutex = false;
+        games[room] = {
+          word: '',
+          revealed: [],
+          guesses: [],
+          mutex: false
+        };
+
+        io.to(room).emit('gameState', games[room]);
       }
     }
   });
 
-  // Clean up empty rooms on disconnect
   socket.on('disconnect', () => {
     console.log('User disconnected:', socket.id);
 
@@ -108,7 +103,6 @@ io.on('connection', (socket) => {
   });
 });
 
-// Start the server, Render will automatically handle HTTPS
-server.listen(80, () => {
-  console.log('Socket.IO server running on https://hangman-backend-afff.onrender.com');
+server.listen(8080, () => {
+  console.log('Socket.IO server running on http://localhost:8080');
 });
