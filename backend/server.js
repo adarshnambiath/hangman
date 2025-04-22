@@ -110,5 +110,5 @@ io.on('connection', (socket) => {
 
 // Start the server, Render will automatically handle HTTPS
 server.listen(80, () => {
-  console.log('Socket.IO server running on https://hangman-backend.onrender.com');
+  console.log('Socket.IO server running on https://hangman-backend-afff.onrender.com');
 });

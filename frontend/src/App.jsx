@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
 import './App.css';
 
-const socket = io('https://hangman-backend.onrender.com');
+const socket = io('https://hangman-backend-afff.onrender.com');
 
 function App() {
   const [room, setRoom] = useState('');
