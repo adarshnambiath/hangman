@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
+import { io } from 'socket.io-client';
 import './App.css';
 
-const socket = new WebSocket('ws://localhost:8080');
+const socket = io('http://localhost:8080');
 
 function App() {
   const [room, setRoom] = useState('');
@@ -16,48 +17,48 @@ function App() {
   const [mutex, setMutex] = useState(false);
 
   useEffect(() => {
-    socket.onmessage = (event) => {
-      const message = JSON.parse(event.data);
-      if (message.type === 'gameState') {
-        setRevealed(message.game.revealed);
-        setGuesses(message.game.guesses);
-        setMutex(message.game.mutex);
-
-        if (message.game.mutex && !hasSetWord) {
-          setIsWordSetter(false);
-        }
-      }
-
-      if (message.type === 'gameOver') {
-        if (message.status === 'win') {
-          alert(`🎉 You guessed it! The word was "${message.word}"`);
-        } else {
-          alert(`💀 Game Over! The word was "${message.word}"`);
-        }
-
+    socket.on('gameState', ({ revealed, guesses, mutex }) => {
+      setRevealed(revealed);
+      setGuesses(guesses);
+      setMutex(mutex);
+      if (mutex && !hasSetWord) {
         setIsWordSetter(false);
-        setHasSetWord(false);
-        setRevealed([]);
-        setGuesses([]);
-        setMutex(false);
       }
+    });
+
+    socket.on('gameOver', ({ word, status }) => {
+      if (status === 'win' && isWordSetter) {
+        alert(` They guessed it! The word was "${word}"`);
+      }
+      else if (status === 'win') {
+        alert(`You guessed it! The word was "${word}"`);}
+       else {
+        alert(`Game Over! The word was "${word}"`);
+      }
+
+      setIsWordSetter(false);
+      setHasSetWord(false);
+      setRevealed([]);
+      setGuesses([]);
+      setMutex(false);
+    });
+
+    return () => {
+      socket.off('gameState');
+      socket.off('gameOver');
     };
   }, [hasSetWord]);
 
-  const send = (data) => {
-    socket.send(JSON.stringify(data));
-  };
-
   const joinRoom = () => {
     if (room.trim() !== '') {
-      send({ type: 'joinRoom', room });
+      socket.emit('joinRoom', room);
       setJoined(true);
     }
   };
 
   const sendWord = () => {
     if (/^[a-zA-Z]+$/.test(wordInput)) {
-      send({ type: 'setWord', room, word: wordInput });
+      socket.emit('setWord', { room, word: wordInput });
       setHasSetWord(true);
       setWordInput('');
     } else {
@@ -68,13 +69,22 @@ function App() {
   const guessLetter = () => {
     const letter = input.trim().toLowerCase();
     if (/^[a-z]$/.test(letter) && !guesses.includes(letter)) {
-      send({ type: 'guessLetter', room, letter });
+      socket.emit('guessLetter', { room, letter });
       setInput('');
     }
   };
 
   const getHangmanDrawing = (wrongGuessCount) => {
-    const parts = ['  O  ', '  |  ', ' /', '|', '\\', ' / ', ' \\'];
+    const parts = [
+      '  O  ',
+      '  |  ',
+      ' /',
+      '|',
+      '\\',
+      ' / ',
+      ' \\'
+    ];
+
     const scaffold = [
       ' +---+',
       ' |   |',
@@ -84,6 +94,7 @@ function App() {
       ' |',
       '========='
     ];
+
     return scaffold.join('\n');
   };
 

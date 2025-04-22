@@ -1,120 +1,115 @@
 const express = require('express');
 const http = require('http');
-const WebSocket = require('ws');
+const { Server } = require('socket.io');
 const cors = require('cors');
 
 const app = express();
 app.use(cors());
 
 const server = http.createServer(app);
-const wss = new WebSocket.Server({ server });
-
-const games = {}; // Tracks game state per room
-const clients = new Map(); // Map each socket to a room
-
-wss.on('connection', (ws) => {
-  console.log('Client connected');
-
-  ws.on('message', (data) => {
-    let msg;
-    try {
-      msg = JSON.parse(data);
-    } catch {
-      return;
-    }
-
-    if (msg.type === 'joinRoom') {
-      const { room } = msg;
-      clients.set(ws, room);
-      ws.room = room;
-
-      if (!games[room]) {
-        games[room] = {
-          word: '',
-          revealed: [],
-          guesses: [],
-          mutex: false
-        };
-      }
-
-      const game = games[room];
-      ws.send(JSON.stringify({ type: 'gameState', game }));
-    }
-
-    if (msg.type === 'setWord') {
-      const { room, word } = msg;
-      const game = games[room];
-      if (!game || game.mutex) return;
-
-      game.word = word.toLowerCase();
-      game.revealed = Array(word.length).fill('_');
-      game.guesses = [];
-      game.mutex = true;
-
-      broadcast(room, { type: 'gameState', game });
-    }
-
-    if (msg.type === 'guessLetter') {
-      const { room, letter } = msg;
-      const game = games[room];
-      if (!game || !game.mutex) return;
-
-      const l = letter.toLowerCase();
-      if (!game.guesses.includes(l)) {
-        game.guesses.push(l);
-
-        for (let i = 0; i < game.word.length; i++) {
-          if (game.word[i] === l) {
-            game.revealed[i] = l;
-          }
-        }
-
-        broadcast(room, { type: 'gameState', game });
-
-        const wrongGuesses = game.guesses.filter(ch => !game.word.includes(ch)).length;
-        const won = !game.revealed.includes('_');
-        const lost = wrongGuesses >= 6;
-
-        if (won || lost) {
-          broadcast(room, {
-            type: 'gameOver',
-            word: game.word,
-            status: won ? 'win' : 'lose'
-          });
-
-          game.word = '';
-          game.revealed = [];
-          game.guesses = [];
-          game.mutex = false;
-        }
-      }
-    }
-  });
-
-  ws.on('close', () => {
-    const room = ws.room;
-    clients.delete(ws);
-
-    if (!room) return;
-
-    setTimeout(() => {
-      const roomClients = Array.from(clients.entries()).filter(([, r]) => r === room);
-      if (roomClients.length === 0) {
-        console.log(`Room "${room}" is empty. Deleting...`);
-        delete games[room];
-      }
-    }, 1000);
-  });
+const io = new Server(server, {
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST']
+  }
 });
 
-function broadcast(room, data) {
-  wss.clients.forEach((client) => {
-    if (client.readyState === WebSocket.OPEN && clients.get(client) === room) {
-      client.send(JSON.stringify(data));
+const games = {}; // Tracks state for each room
+
+io.on('connection', (socket) => {
+  console.log('A user connected:', socket.id);
+
+  // Handle joining a room
+  socket.on('joinRoom', (room) => {
+    socket.join(room);
+    socket.room = room;
+
+    // Create room if it doesn't exist
+    if (!games[room]) {
+      games[room] = {
+        word: '',
+        revealed: [],
+        guesses: [],
+        mutex: false
+      };
+    }
+
+    const game = games[room];
+    socket.emit('gameState', game);
+  });
+
+  // Set the word to be guessed
+  socket.on('setWord', ({ room, word }) => {
+    const game = games[room];
+    if (!game || game.mutex) return;
+
+    game.word = word.toLowerCase();
+    game.revealed = Array(word.length).fill('_');
+    game.guesses = [];
+    game.mutex = true;
+
+    io.to(room).emit('gameState', game);
+  });
+
+  // Handle guessing a letter
+  socket.on('guessLetter', ({ room, letter }) => {
+    const game = games[room];
+    if (!game || !game.mutex) return;
+
+    letter = letter.toLowerCase();
+    if (!game.guesses.includes(letter)) {
+      game.guesses.push(letter);
+
+      for (let i = 0; i < game.word.length; i++) {
+        if (game.word[i] === letter) {
+          game.revealed[i] = letter;
+        }
+      }
+
+      io.to(room).emit('gameState', game);
+
+      const wrongGuesses = game.guesses.filter(l => !game.word.includes(l)).length;
+      const won = !game.revealed.includes('_');
+      const lost = wrongGuesses >= 6;
+
+      if (won || lost) {
+        io.to(room).emit('gameOver', {
+          word: game.word,
+          status: won ? 'win' : 'lose'
+        });
+
+        // Reset game for room
+        game.word = '';
+        game.revealed = [];
+        game.guesses = [];
+        game.mutex = false;
+      }
     }
   });
-}
+
+  // Clean up empty rooms on disconnect
+  socket.on('disconnect', () => {
+    console.log('User disconnected:', socket.id);
+  
+    const room = socket.room;
+    if (!room) return;
+  
+    // Give a short delay to allow for reconnections before cleanup (optional)
+    setTimeout(() => {
+      const roomInfo = io.sockets.adapter.rooms.get(room);
+      const roomSize = roomInfo ? roomInfo.size : 0;
+  
+      if (roomSize === 0) {
+        console.log(`Room "${room}" is now empty. Deleting it.`);
+        delete games[room];
+      } else {
+        console.log(`Room "${room}" still has ${roomSize} player(s), not deleting.`);
+      }
+    }, 100); // small delay just in case
+  });
+  
+});
 
 server.listen(8080, () => {
-  console.log('WebSocket server running on http://localhost:8080');
+  console.log('Socket.IO server running on http://localhost:8080');
 });
