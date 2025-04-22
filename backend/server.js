@@ -1,21 +1,25 @@
 const express = require('express');
-const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
 
 const app = express();
 app.use(cors());
 
-const server = http.createServer(app);
+// Create an HTTP server (Render will handle HTTPS)
+const server = require('http').Server(app);
+
+// Create a Socket.IO server
 const io = new Server(server, {
   cors: {
-    origin: '*',
+    origin: '*', // You can specify your Netlify frontend URL here if needed
     methods: ['GET', 'POST']
   }
 });
 
+// Track the game state
 const games = {}; // Tracks state for each room
 
+// Handle new connections
 io.on('connection', (socket) => {
   console.log('A user connected:', socket.id);
 
@@ -90,26 +94,21 @@ io.on('connection', (socket) => {
   // Clean up empty rooms on disconnect
   socket.on('disconnect', () => {
     console.log('User disconnected:', socket.id);
-  
+
     const room = socket.room;
     if (!room) return;
-  
-    // Give a short delay to allow for reconnections before cleanup (optional)
+
     setTimeout(() => {
-      const roomInfo = io.sockets.adapter.rooms.get(room);
-      const roomSize = roomInfo ? roomInfo.size : 0;
-  
+      const roomSize = io.sockets.adapter.rooms.get(room)?.size || 0;
       if (roomSize === 0) {
-        console.log(`Room "${room}" is now empty. Deleting it.`);
+        console.log(`Room "${room}" is empty. Deleting...`);
         delete games[room];
-      } else {
-        console.log(`Room "${room}" still has ${roomSize} player(s), not deleting.`);
       }
-    }, 100); // small delay just in case
+    }, 1000);
   });
-  
 });
 
-server.listen(8080, () => {
-  console.log('Socket.IO server running on http://localhost:8080');
+// Start the server, Render will automatically handle HTTPS
+server.listen(80, () => {
+  console.log('Socket.IO server running on https://hangman-backend.onrender.com');
 });
