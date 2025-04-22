@@ -1,7 +1,7 @@
-const express = require('express');
-const http = require('http');
-const { Server } = require('socket.io');
-const cors = require('cors');
+const express = require("express");
+const http = require("http");
+const { Server } = require("socket.io");
+const cors = require("cors");
 
 const app = express();
 app.use(cors());
@@ -9,51 +9,51 @@ app.use(cors());
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: '*',
-    methods: ['GET', 'POST']
-  }
+    origin: "*",
+    methods: ["GET", "POST"],
+  },
 });
 
-const games = {}; 
+const games = {};
 
-io.on('connection', (socket) => {
-  console.log('A user connected:', socket.id);
+io.on("connection", (socket) => {
+  console.log("A user connected:", socket.id);
 
-  socket.on('joinRoom', (room) => {
+  socket.on("joinRoom", (room) => {
     socket.join(room);
     socket.room = room;
 
     if (!games[room]) {
+      //if the room doesnt exist
       games[room] = {
-        word: '',
+        word: "",
         revealed: [],
         guesses: [],
-        mutex: false
+        mutex: false,
       };
     }
 
     const game = games[room];
-    socket.emit('gameState', game);
+    socket.emit("gameState", game);
   });
 
-  socket.on('setWord', ({ room, word }) => {
+  socket.on("setWord", ({ room, word }) => {
     const game = games[room];
     if (!game || game.mutex) return;
 
     game.word = word.toLowerCase();
-    game.revealed = Array(word.length).fill('_');
+    game.revealed = Array(word.length).fill("_");
     game.guesses = [];
     game.mutex = true;
 
-    io.to(room).emit('gameState', game);
+    io.to(room).emit("gameState", game);
   });
 
-  // Handle guessing a letter
-  socket.on('guessLetter', ({ room, letter }) => {
+  socket.on("guessLetter", ({ room, letter }) => {
     const game = games[room];
     if (!game || !game.mutex) return;
 
-    letter = letter.toLowerCase();
+    letter = letter.toLowerCase(); // to remove case sensitivity
     if (!game.guesses.includes(letter)) {
       game.guesses.push(letter);
 
@@ -63,32 +63,33 @@ io.on('connection', (socket) => {
         }
       }
 
-      io.to(room).emit('gameState', game);
+      io.to(room).emit("gameState", game);
 
-      const wrongGuesses = game.guesses.filter(l => !game.word.includes(l)).length;
-      const won = !game.revealed.includes('_');
+      const wrongGuesses = game.guesses.filter((l) => !game.word.includes(l))
+        .length;
+      const won = !game.revealed.includes("_");
       const lost = wrongGuesses >= 6;
 
       if (won || lost) {
-        io.to(room).emit('gameOver', {
+        io.to(room).emit("gameOver", {
           word: game.word,
-          status: won ? 'win' : 'lose'
+          status: won ? "win" : "lose", //propogates win status
         });
 
         games[room] = {
-          word: '',
+          word: "",
           revealed: [],
           guesses: [],
-          mutex: false
+          mutex: false,
         };
 
-        io.to(room).emit('gameState', games[room]);
+        io.to(room).emit("gameState", games[room]);
       }
     }
   });
 
-  socket.on('disconnect', () => {
-    console.log('User disconnected:', socket.id);
+  socket.on("disconnect", () => {
+    console.log("User disconnected:", socket.id);
 
     const room = socket.room;
     if (!room) return;
@@ -96,7 +97,7 @@ io.on('connection', (socket) => {
     setTimeout(() => {
       const roomSize = io.sockets.adapter.rooms.get(room)?.size || 0;
       if (roomSize === 0) {
-        console.log(`Room "${room}" is empty. Deleting...`);
+        console.log(`Room "${room}" is empty. Deleting...`); //deletion of room if nobody is in it
         delete games[room];
       }
     }, 1000);
@@ -104,5 +105,5 @@ io.on('connection', (socket) => {
 });
 
 server.listen(8080, () => {
-  console.log('Socket.IO server running on http://localhost:8080');
+  console.log("Socket.IO server running on http://localhost:8080");
 });

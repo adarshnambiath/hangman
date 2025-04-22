@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
 import './App.css';
 
-const socket = io('https://hangman-backend-afff.onrender.com');
+//const socket = io('https://hangman-backend-afff.onrender.com');
+const socket = io('http://localhost:8080');
+
 
 function App() {
   const [room, setRoom] = useState('');
@@ -27,10 +29,10 @@ function App() {
     });
 
     socket.on('gameOver', ({ word, status }) => {
-      if (status === 'win' && isWordSetter) {
+      if (status === 'win' && isWordSetter) {//display for word setter
         alert(` They guessed it! The word was "${word}"`);
       } 
-      else if(status==='win'){
+      else if(status==='win'){//display for guesser
         alert(` You guessed it! The word was "${word}"`);
       }
       else {
@@ -75,7 +77,7 @@ function App() {
     }
   };
 
-  const getHangmanDrawing = (wrongGuessCount) => {
+  const getHangmanDrawing = (wrongGuessCount) => {//ascii for hangman
     const parts = [
       '  O  ',
       '  |  ',
@@ -91,7 +93,7 @@ function App() {
       ' |   |',
       ` |   ${wrongGuessCount > 0 ? parts[0] : ''}`,
       ` |  ${wrongGuessCount > 2 ? parts[2] : ' '}${wrongGuessCount > 1 ? parts[1] : ''}${wrongGuessCount > 3 ? parts[4] : ''}`,
-      ` |  ${wrongGuessCount > 4 ? parts[5] : ''}${wrongGuessCount > 5 ? parts[6] : ''}`,
+      ` |  ${wrongGuessCount > 4 ? parts[5] : ''}${wrongGuessCount > 5 ? parts[6] : ''}`,//ternary operator for display
       ' |',
       '========='
     ];
@@ -112,7 +114,7 @@ function App() {
     );
   }
 
-  return (
+  return (//html portion
     <div style={{ padding: 20 }}>
       <h1>Hangman Game (Room: {room})</h1>
 
